@@ -2,7 +2,7 @@ import time
 
 import pandas as pd
 import os
-
+from sklearn.metrics import accuracy_score
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, random_split
 # from transformers.utils.notebook import format_time
 from torch.utils.throughput_benchmark import format_time
@@ -10,11 +10,11 @@ from torch.utils.throughput_benchmark import format_time
 import global_vars
 from transformers import BertTokenizer, BertForSequenceClassification, AdamW
 import torch
-from util import flat_accuracy
+from util import flat_accuracy, plot_metrics
 
 # reading in CSV: clickbait = 1, non-clickbait = 0
 
-def tokenize():
+def parse_indonesian_df():
     # iterate through the CSVS in the folder. append them all to one DF
     directory_name = global_vars.indonesia_csv_dir
     df = pd.DataFrame()
@@ -25,14 +25,44 @@ def tokenize():
         df = pd.concat([df, temp])
     # print(df)
     df = df.dropna()
+    return df
+
+def parse_english_df():
+    df = pd.read_csv(global_vars.english_csv_name)
+    df.dropna()
+    # split df into clickbait and non
+    df_clickbait = df[df['clickbait'] == 1]
+    df_not = df[df['clickbait'] == 0]
+    # print(df_not)
+    df_clickbait = df_clickbait.truncate(after=6290-1)
+    df_not = df_not.truncate(after=15999+8710-1)
+    df_main = pd.concat((df_clickbait, df_not))
+    # print(df)
+    return df_main
+
+
+def tokenize():
+    if global_vars.data_using == 0:
+        df = parse_indonesian_df()
+        title = "title"
+        label_ = "label_score"
+    elif global_vars.data_using == 1:
+        df = parse_english_df()
+        title = "headline"
+        label_ = "clickbait"
+
+    print(df)
+    # print(len(df)) # 15000 datapoints, of which 6290 are clickbait
+    # df_clickbait = df[df['label_score'] == 1]
+    # print(len(df_clickbait))
     labels = []
     # getting labels
-    for label in df["label_score"]:
+    for label in df[label_]:
         labels.append(label)
     inputs_all = []
     attention_masks_all = []
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
-    for sentence in df["title"]:
+    for sentence in df[title]:
         # print(sentence)
         inputs = tokenizer.encode(sentence, add_special_tokens=True)
         # print(inputs)
@@ -85,9 +115,14 @@ def setup_optimizer(model):
                       )
     return optimizer
 def train(model, optimizer, device, train_dataloader, val_dataloader):
+    train_losses =[]
+    train_accs = []
+    val_losses = []
+    val_accs = []
     for epoch in range(0,global_vars.num_epochs):
         t0 = time.time()
         total_train_loss = 0
+        total_train_acc = 0
         model.train()
         for step, batch in enumerate(train_dataloader):
             if step % 40 == 0 and not step == 0:
@@ -105,16 +140,23 @@ def train(model, optimizer, device, train_dataloader, val_dataloader):
                                  return_dict=False)
             print({'train_batch_loss': loss.item()})
             total_train_loss += loss.item()
+            label_ids = b_labels.to('cpu').numpy()
+            total_train_acc += flat_accuracy(logits, label_ids)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             # scheduler.step()
         avg_train_loss = total_train_loss / len(train_dataloader)
+        avg_train_acc = total_train_acc / len(train_dataloader)
+        train_losses.append(avg_train_loss)
+        train_accs.append(avg_train_acc)
         training_time = format_time(time.time() - t0)
         # Log the Avg. train loss
         print({'avg_train_loss': avg_train_loss})
         print("")
         print("  Average training loss: {0:.2f}".format(avg_train_loss))
+        print("  Average training accuracy: {0:.2f}".format(avg_train_acc))
+
         print("Running Validation...")
         t0 = time.time()
         model.eval()
@@ -142,12 +184,14 @@ def train(model, optimizer, device, train_dataloader, val_dataloader):
         avg_val_accuracy = total_eval_accuracy / len(val_dataloader)
         print("  Accuracy: {0:.2f}".format(avg_val_accuracy))
         avg_val_loss = total_eval_loss / len(val_dataloader)
-
+        val_accs.append(avg_val_accuracy)
+        val_losses.append(avg_val_loss)
         validation_time = format_time(time.time() - t0)
         # Log the Avg. validation accuracy
         print(({'val_accuracy': avg_val_accuracy, 'avg_val_loss': avg_val_loss}))
         print("  Validation Loss: {0:.2f}".format(avg_val_loss))
 
+    plot_metrics(train_losses, train_accs, val_losses, val_accs)
 
 def main():
     dataset = tokenize()
