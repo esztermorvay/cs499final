@@ -123,15 +123,16 @@ def train(model, optimizer, device, train_dataloader, val_dataloader):
         nb_eval_steps = 0
         # Evaluate data for one epoch
         for batch in val_dataloader:
-            # TODO: NEEDS CUDA SUPPORT
-            b_input_ids = batch[0].cuda()
+            # b_input_ids = batch[0].cuda()
+            b_input_ids = batch[0].to(device)
             b_input_mask = batch[1].to(device)
             b_labels = batch[2].to(device)
             with torch.no_grad():
                 (loss, logits) = model(b_input_ids,
                                        token_type_ids=None,
                                        attention_mask=b_input_mask,
-                                       labels=b_labels)
+                                       labels=b_labels,
+                                       return_dict=False)
 
             total_eval_loss += loss.item()
             logits = logits.detach().cpu().numpy()
