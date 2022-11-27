@@ -141,7 +141,7 @@ def train(model, optimizer, device, train_dataloader, val_dataloader):
             print({'train_batch_loss': loss.item()})
             total_train_loss += loss.item()
             label_ids = b_labels.to('cpu').numpy()
-            total_train_acc += flat_accuracy(logits, label_ids)
+            total_train_acc += flat_accuracy(logits.detach().numpy(), label_ids)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
