@@ -22,7 +22,7 @@ def plot_metrics(train_loss, train_acc, val_loss, val_acc):
     plt.plot(train_loss, label="train")
     plt.plot(val_loss, label="val")
     plt.ylabel("loss")
-    plt.xlabel("epochs")
+    plt.xlabel("epoch")
     plt.legend()
 
     save_name_pref = language_name+str(global_vars.learning_rate)
@@ -36,7 +36,7 @@ def plot_metrics(train_loss, train_acc, val_loss, val_acc):
     plt.plot(train_acc, label="train")
     plt.plot(val_acc, label="val")
     plt.ylabel("accuracy")
-    plt.xlabel("epochs")
+    plt.xlabel("epoch")
     plt.legend()
     save_name = save_name_pref + "accuracy.png"
     plt.savefig("graphs/" + save_name)
