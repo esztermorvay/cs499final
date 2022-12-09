@@ -1,16 +1,21 @@
 import time
 
+import numpy as np
 import pandas as pd
 import os
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, classification_report, f1_score
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, random_split
 # from transformers.utils.notebook import format_time
 from torch.utils.throughput_benchmark import format_time
 
 import global_vars
-from transformers import BertTokenizer, BertForSequenceClassification, AdamW
+from transformers import BertTokenizer, BertForSequenceClassification, AdamW, BertModel
 import torch
 from util import flat_accuracy, plot_metrics
+
+# TODO get the new metrics and confusion matrix working
+# TODO parse the Telugu dataset and run it
+# TODO get the multilingual model to work, and run all the datasets through it
 
 # reading in CSV: clickbait = 1, non-clickbait = 0
 
@@ -62,6 +67,8 @@ def tokenize():
     inputs_all = []
     attention_masks_all = []
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+    # tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-uncased')
+
     for sentence in df[title]:
         # print(sentence)
         inputs = tokenizer.encode(sentence, add_special_tokens=True)
@@ -106,6 +113,12 @@ def setup_model():
         output_attentions=False,
         output_hidden_states=False,
     )
+    # model = BertModel.from_pretrained(
+    #     "bert-base-multilingual-uncased",
+    #     num_labels=2,
+    #     output_attentions=False,
+    #     output_hidden_states=False,
+    # )
     return model
 
 def setup_optimizer(model):
@@ -117,12 +130,22 @@ def setup_optimizer(model):
 def train(model, optimizer, device, train_dataloader, val_dataloader):
     train_losses =[]
     train_accs = []
+    train_precisions = []
+    train_recalls = []
+    train_f1s = []
     val_losses = []
     val_accs = []
+    val_precisions = []
+    val_recalls = []
+    val_f1s = []
+
     for epoch in range(0,global_vars.num_epochs):
         t0 = time.time()
         total_train_loss = 0
         total_train_acc = 0
+        total_precision = 0
+        total_f1 = 0
+        total_recall = 0
         model.train()
         for step, batch in enumerate(train_dataloader):
             if step % 40 == 0 and not step == 0:
@@ -138,18 +161,28 @@ def train(model, optimizer, device, train_dataloader, val_dataloader):
                                  attention_mask=b_input_mask,
                                  labels=b_labels,
                                  return_dict=False)
-            print({'train_batch_loss': loss.item()})
+            # print({'train_batch_loss': loss.item()})
             total_train_loss += loss.item()
             label_ids = b_labels.to('cpu').numpy()
             total_train_acc += flat_accuracy(logits.detach().numpy(), label_ids)
+            metrics = classification_report(label_ids, np.argmax(logits.detach().numpy(), axis=1), digits=4, output_dict=True)
+            total_precision += metrics["weighted avg"]["precision"]
+            total_f1 += metrics["weighted avg"]["f1-score"]
+            total_recall += metrics["weighted avg"]["recall"]
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             # scheduler.step()
         avg_train_loss = total_train_loss / len(train_dataloader)
         avg_train_acc = total_train_acc / len(train_dataloader)
+        avg_recall = total_recall / len(train_dataloader)
+        avg_precision = total_precision / len(train_dataloader)
+        avg_f1 = total_f1 / len(train_dataloader)
         train_losses.append(avg_train_loss)
         train_accs.append(avg_train_acc)
+        train_precisions.append(avg_precision)
+        train_recalls.append(avg_recall)
+        train_f1s.append(avg_f1)
         training_time = format_time(time.time() - t0)
         # Log the Avg. train loss
         print({'avg_train_loss': avg_train_loss})
@@ -162,6 +195,9 @@ def train(model, optimizer, device, train_dataloader, val_dataloader):
         model.eval()
         total_eval_accuracy = 0
         total_eval_loss = 0
+        total_eval_precision = 0
+        total_eval_f1 = 0
+        total_eval_recall = 0
         nb_eval_steps = 0
         # Evaluate data for one epoch
         for batch in val_dataloader:
@@ -180,18 +216,30 @@ def train(model, optimizer, device, train_dataloader, val_dataloader):
             logits = logits.detach().cpu().numpy()
             label_ids = b_labels.to('cpu').numpy()
             total_eval_accuracy += flat_accuracy(logits, label_ids)
+            total_eval_precision += metrics["weighted avg"]["precision"]
+            total_eval_f1 += metrics["weighted avg"]["f1-score"]
+            total_eval_recall += metrics["weighted avg"]["recall"]
+            # get the recall, f1, precision scores
+            print(classification_report(label_ids, np.argmax(logits, axis=1), digits=4))
 
         avg_val_accuracy = total_eval_accuracy / len(val_dataloader)
         print("  Accuracy: {0:.2f}".format(avg_val_accuracy))
         avg_val_loss = total_eval_loss / len(val_dataloader)
+        avg_eval_recall = total_recall / len(train_dataloader)
+        avg_eval_precision = total_precision / len(train_dataloader)
+        avg_eval_f1 = total_f1 / len(train_dataloader)
         val_accs.append(avg_val_accuracy)
         val_losses.append(avg_val_loss)
+        val_precisions.append(avg_eval_precision)
+        val_recalls.append(avg_eval_recall)
+        val_f1s.append(avg_eval_f1)
         validation_time = format_time(time.time() - t0)
         # Log the Avg. validation accuracy
         print(({'val_accuracy': avg_val_accuracy, 'avg_val_loss': avg_val_loss}))
         print("  Validation Loss: {0:.2f}".format(avg_val_loss))
-
-    plot_metrics(train_losses, train_accs, val_losses, val_accs)
+    train_metrics = [train_losses, train_accs, train_f1s, train_precisions, train_recalls]
+    val_metrics = [val_losses, val_accs, val_f1s, val_precisions, val_recalls]
+    plot_metrics(train_metrics, val_metrics)
 
 def main():
     dataset = tokenize()
