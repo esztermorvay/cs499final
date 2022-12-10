@@ -45,6 +45,29 @@ def parse_english_df():
     # print(df)
     return df_main
 
+def parse_telugu_df():
+    df = pd.read_csv(global_vars.telugu_csv_name)
+    df.dropna()
+    # split df into clickbait and non
+    df_clickbait = df[df['label'] == 1]
+    df_not = df[df['label'] == 0]
+    # print(df_not)
+    df_clickbait = df_clickbait.truncate(after=6290-1)
+    df_not = df_not.truncate(after=15999+8710-1)
+    df_main = pd.concat((df_clickbait, df_not))
+    # print(df)
+    return df_main
+    df.dropna()
+    # split df into clickbait and non
+    df_clickbait = df[df['clickbait'] == 1]
+    df_not = df[df['clickbait'] == 0]
+    # print(df_not)
+    df_clickbait = df_clickbait.truncate(after=6290-1)
+    df_not = df_not.truncate(after=15999+8710-1)
+    df_main = pd.concat((df_clickbait, df_not))
+    # print(df)
+    return df_main
+
 
 def tokenize():
     if global_vars.data_using == 0:
@@ -55,6 +78,10 @@ def tokenize():
         df = parse_english_df()
         title = "headline"
         label_ = "clickbait"
+    elif global_vars.data_using == 2:
+        df = parse_telugu_df()
+        title = "text"
+        label_ = "label"
 
     print(df)
     # print(len(df)) # 15000 datapoints, of which 6290 are clickbait

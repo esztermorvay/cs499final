@@ -17,6 +17,8 @@ def plot_metrics(train_metrics, val_metrics):
         language_name = "Indonesian"
     elif global_vars.data_using == 1:
         language_name = "English"
+    elif global_vars.data_using == 2:
+        language_name = "Telugu"
     save_name_pref = language_name+str(global_vars.learning_rate)
 
     for i in range(0,len(train_metrics)):
