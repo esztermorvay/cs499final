@@ -140,11 +140,12 @@ def setup_model():
         output_attentions=False,
         output_hidden_states=False,
     )
-    # model = BertModel.from_pretrained(
+    # model = BertForSequenceClassification.from_pretrained(
     #     "bert-base-multilingual-uncased",
     #     num_labels=2,
     #     output_attentions=False,
     #     output_hidden_states=False,
+    
     # )
     return model
 
