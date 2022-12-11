@@ -134,19 +134,19 @@ def setup_dataloader(dataset):
 
 def setup_model():
     # TODO: change the model to be the multilingual one here. i'm just using this from the tutorial to test it for now
-    model = BertForSequenceClassification.from_pretrained(
-        "bert-base-uncased",
-        num_labels=2,
-        output_attentions=False,
-        output_hidden_states=False,
-    )
     # model = BertForSequenceClassification.from_pretrained(
-    #     "bert-base-multilingual-uncased",
+    #     "bert-base-uncased",
     #     num_labels=2,
     #     output_attentions=False,
     #     output_hidden_states=False,
-    
     # )
+    model = BertForSequenceClassification.from_pretrained(
+        "bert-base-multilingual-uncased",
+        num_labels=2,
+        output_attentions=False,
+        output_hidden_states=False,
+    
+    )
     return model
 
 def setup_optimizer(model):
